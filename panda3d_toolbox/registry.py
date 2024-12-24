@@ -192,7 +192,7 @@ class ClassRegistry(Singleton):
             cls_name, meta_tag, meta_value))
         meta[meta_tag] = meta_value
     
-    def query_meta(self, **meta) -> list:
+    def query_meta(self, **query) -> list:
         """
         Queries the class registry for all class meta data 
         matching the requested query
@@ -205,9 +205,8 @@ class ClassRegistry(Singleton):
         # classes that match the query data
         for class_name in self._classes:
             cls_name, module_name, module, meta = self._classes[class_name]
-
-            for meta_tag, meta_value in list(meta.items()):
-                if meta_tag in meta and meta[meta_tag] == meta_value:
+            for query_tag, query_value in list(query.items()):
+                if query_tag in meta and meta[query_tag] == query_value:
                     cls = self.get_class(class_name)
                     if cls:
                         classes.append(cls)

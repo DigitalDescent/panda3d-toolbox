@@ -7,7 +7,7 @@ The module also provides load functions for standardized sets of configuration v
 such as for headless applications.
 """
 
-import os as __os
+import os as os
 
 from panda3d.core import ConfigVariable, ConfigVariableList, ConfigVariableString
 from panda3d.core import ConfigVariableFilename, ConfigVariableBool, ConfigVariableInt
@@ -15,16 +15,17 @@ from panda3d.core import ConfigVariableDouble, ConfigVariableColor, ConfigVariab
 from panda3d.core import ConfigVariableSearchPath, ConfigFlags, Filename
 from panda3d.core import load_prc_file as _load_prc_file
 from panda3d.core import load_prc_file_data as _load_prc_file_data
+from panda3d.core import ExecutionEnvironment
 
-from direct.directnotify.DirectNotifyGlobal import directNotify as __directNotify
-from panda3d_toolbox import runtime as __runtime
-from panda3d_toolbox import utils as __utils
-from panda3d_vfs import path_exists as __path_exists
+from direct.directnotify.DirectNotifyGlobal import directNotify as directNotify
+from panda3d_toolbox import runtime
+from panda3d_toolbox import text
+from panda3d_vfs import path_exists
 
 #----------------------------------------------------------------------------------------------------------------------------------#
 
-__prc_notify = __directNotify.newCategory('prc')
-__prc_notify.setInfo(True)
+prc_notify = directNotify.newCategory('prc')
+prc_notify.setInfo(True)
 
 def load_prc_file_data(data: str, label: str = '') -> None:
     """
@@ -38,11 +39,11 @@ def load_prc_file_data(data: str, label: str = '') -> None:
 
     # Check if the base has already been defined
     # if it has been defined warn the user.
-    if __runtime.has_base():
-        __prc_notify.warning('Showbase has already been defined. PRC changes may be ignored')
+    if runtime.has_base():
+        prc_notify.warning('Showbase has already been defined. PRC changes may be ignored')
 
     if label != '' and label.isspace() == False:
-        __prc_notify.info('Setting PRC data for label: %s' % label)
+        prc_notify.info('Setting PRC data for label: %s' % label)
     _load_prc_file_data(label, data)
 
 def load_prc_file(path: str, optional: bool = False) -> bool:
@@ -53,22 +54,22 @@ def load_prc_file(path: str, optional: bool = False) -> bool:
 
     # Check if the base has already been defined
     # if it has been defined warn the user.
-    if __runtime.has_base():
-        __prc_notify.warning('Showbase has already been defined. PRC changes may be ignored')
+    if runtime.has_base():
+        prc_notify.warning('Showbase has already been defined. PRC changes may be ignored')
 
-    if not __path_exists(path) and not optional:
-        __prc_notify.error('Failed to load prc file: %s. File does not exist' % path)
+    if not path_exists(path) and not optional:
+        prc_notify.error('Failed to load prc file: %s. File does not exist' % path)
         return False
     
     # Return if the path does not exist and we are optional
-    if not __path_exists(path) and optional:
-        __prc_notify.warning('Skipping optional prc: %s' % path)
+    if not path_exists(path) and optional:
+        prc_notify.warning('Skipping optional prc: %s' % path)
         return False
 
     if optional:
-        __prc_notify.info('Loading optional runtime config: %s' % path)
+        prc_notify.info('Loading optional runtime config: %s' % path)
     else:
-        __prc_notify.info('Loading runtime config: %s' % path)
+        prc_notify.info('Loading runtime config: %s' % path)
     
     _load_prc_file(Filename.from_os_specific(path))
     return True
@@ -100,10 +101,13 @@ def get_launch_double(key: str, default: int = 0) -> float:
     Example test-variable becomes TEST_VARIABLE.
     """
 
-    environment_key = __utils.get_snake_case(key).upper()
-    prc_variable = ConfigVariableDouble(key, default)
-    launch_value = float(__os.environ.get(environment_key, str(prc_variable.get_value())))
-    return launch_value
+    environment_key = text.get_environ_name(key)
+    has_environment_variable = ExecutionEnvironment.has_environment_variable(environment_key)
+    if has_environment_variable:
+        launch_value = float(ExecutionEnvironment.get_environment_variable(environment_key))
+        return launch_value
+    
+    return get_prc_double(key, default)
 
 def get_launch_int(key: str, default: int = 0) -> int:
     """
@@ -115,10 +119,13 @@ def get_launch_int(key: str, default: int = 0) -> int:
     Example test-variable becomes TEST_VARIABLE.
     """
 
-    environment_key = __utils.get_snake_case(key).upper()
-    prc_variable = ConfigVariableInt(key, default)
-    launch_value = int(__os.environ.get(environment_key, str(prc_variable.get_value())))
-    return launch_value
+    environment_key = text.get_environ_name(key)
+    has_environment_variable = ExecutionEnvironment.has_environment_variable(environment_key)
+    if has_environment_variable:
+        launch_value = int(ExecutionEnvironment.get_environment_variable(environment_key))
+        return launch_value
+    
+    return get_prc_int(key, default)
 
 def get_launch_string(key: str, default: str = '') -> str:
     """
@@ -130,10 +137,13 @@ def get_launch_string(key: str, default: str = '') -> str:
     Example test-variable becomes TEST_VARIABLE.
     """
 
-    environment_key = __utils.get_snake_case(key).upper()
-    prc_variable = ConfigVariableString(key, default)
-    launch_value = __os.environ.get(environment_key, prc_variable.get_value())
-    return launch_value
+    environment_key = text.get_environ_name(key)
+    has_environment_variable = ExecutionEnvironment.has_environment_variable(environment_key)
+    if has_environment_variable:
+        launch_value = ExecutionEnvironment.get_environment_variable(environment_key)
+        return launch_value
+    
+    return get_prc_string(key, default)
 
 def get_launch_bool(key: str, default: bool = False) -> bool:
     """
@@ -145,10 +155,13 @@ def get_launch_bool(key: str, default: bool = False) -> bool:
     Example test-variable becomes TEST_VARIABLE.
     """
 
-    environment_key = __utils.get_snake_case(key).upper()
-    prc_variable = ConfigVariableBool(key, default)
-    launch_value = bool(__os.environ.get(environment_key, str(prc_variable.get_value())))
-    return launch_value
+    environment_key = text.get_environ_name(key)
+    has_environment_variable = ExecutionEnvironment.has_environment_variable(environment_key)
+    if has_environment_variable:
+        launch_value = bool(ExecutionEnvironment.get_environment_variable(environment_key))
+        return launch_value
+    
+    return get_prc_bool(key, default)
 
 def get_prc_list(key: str) -> list:
     """
@@ -341,7 +354,7 @@ def set_prc_color(key: str, value: str) -> None:
 
     ConfigVariableColor(key).set_value(value)
 
-__prc_type_map = {
+prc_type_map = {
     ConfigVariable.VT_undefined: (get_prc_string_value, set_prc_string_value),
     ConfigVariable.VT_list: (get_prc_list, None),
     ConfigVariable.VT_string: (get_prc_string, set_prc_string),
@@ -363,13 +376,13 @@ def get_prc_value(key: str, default: object = None) -> object:
     """
 
     value_type = get_prc_value_type(key)
-    type_info = __prc_type_map.get(value_type, None)
+    type_info = prc_type_map.get(value_type, None)
     if type_info is None:
         raise ValueError('PRC type (%s) is not a valid prc value type.' % value_type)
 
     getter, setter = type_info
     if getter is None:
-        __prc_notify.warning('PRC type (%s) does not support value retrieval' % value_type)
+        prc_notify.warning('PRC type (%s) does not support value retrieval' % value_type)
         return
 
     value = getter(key, default)
@@ -382,13 +395,13 @@ def set_prc_value(key: str, value: object) -> None:
     """
 
     value_type = get_prc_value_type(key)
-    type_info = __prc_type_map.get(value_type, None)
+    type_info = prc_type_map.get(value_type, None)
     if type_info is None:
         raise ValueError('PRC type (%s) is not a valid prc value type.' % value_type)
 
     getter, setter = type_info
     if setter is None:
-        __prc_notify.warning('Failed to set key: %s. PRC type (%s) does not support value setting' % (key, value_type))
+        prc_notify.warning('Failed to set key: %s. PRC type (%s) does not support value setting' % (key, value_type))
         return
 
     setter(key, value)

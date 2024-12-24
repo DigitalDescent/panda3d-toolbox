@@ -1,22 +1,22 @@
+"""
+The runtime module provides a set of utility functions for determining the current
+runtime environment of the application. This includes checking if the application
+is running as a developer build, production build, or inside a virtual environment.
+"""
+
 import builtins
 import sys as __sys
 import os as __os
 
 #----------------------------------------------------------------------------------------------------------------------------------#
 
-def __get_base_executable_name() -> str:
+def is_debugger() -> bool:
     """
-    Returns the base executable name
+    Returns true if the application is being run from a debugger.
+    This method is designed to detect the debugging method used by VSCode.
     """
 
-    basename = __os.path.basename(__sys.argv[0])
-    if basename == '-m':
-        basename = __os.environ.get('APP_NAME', 'panda3d')
-
-    basename = __os.path.splitext(basename)[0]
-    return basename
-
-executable_name = __get_base_executable_name()
+    return 'debugpy' in __sys.modules
 
 def is_venv() -> bool:
     """
@@ -48,13 +48,50 @@ def is_interactive() -> bool:
     import sys
     return hasattr(sys, 'ps1') and hasattr(sys, 'ps2')
 
+
+def is_dev() -> bool:
+    """
+    Returns true if the application is current
+    running in developer mode
+    """
+    
+    if hasattr(builtins, '__dev__'):
+        return builtins.__dev__
+    
+    module = __get_module()
+    if not module.has_dev():
+        return False
+    
+    return module.get_dev()
+
 def is_developer_build() -> bool:
     """
     Returns true if the application is currently
     running as a developer build
     """
     
-    return (builtins.__dev__ or is_interactive()) and not is_frozen()
+    return (is_dev() or is_interactive() or is_debugger()) and not is_frozen()
+
+def is_docker_build() -> bool:
+    """
+    Returns true if the application is currently 
+    running inside a Docker container.
+    """
+
+    try:
+        # Check for Docker-specific cgroup file
+        with open('/proc/1/cgroup', 'r') as f:
+            content = f.read()
+            if 'docker' in content or 'containerd' in content:
+                return True
+    except FileNotFoundError:
+        pass
+    
+    # Check for Docker environment file
+    if __os.path.exists('/.dockerenv'):
+        return True
+    
+    return False
 
 def is_production_build() -> bool:
     """
@@ -62,7 +99,7 @@ def is_production_build() -> bool:
     running as a production build
     """
 
-    return not is_developer_build()
+    return not is_developer_build() or is_docker_build()
 
 def get_repository() -> object:
     """
@@ -90,15 +127,60 @@ def is_panda3d_build() -> bool:
 
     return is_frozen()
 
+def is_nuitka_build() -> bool:
+    """
+    Returns true if the application is currently
+    running as a Nuitka build
+    """
+
+    return False #TODO: Implement Nuitka build detection
+
 def is_built_executable() -> bool:
     """
     Returns true if the application is currently
     running as a built executable
     """
 
-    compiled = is_panda3d_build()
+    panda_build = is_panda3d_build()
+    nuitka_build = is_nuitka_build()
 
-    return compiled
+    return panda_build or nuitka_build
+
+def get_base_executable_name() -> str:
+    """
+    Returns the base executable name
+    """
+
+    # If the script being run is a __main__.py file then our executable
+    # name should be our parent directory name. This is also true if the application
+    # is currently being run from a debugger such as the one included in VSCode.
+    # Alternatively if APP_NAME is supplied as an environment variable then we should
+    # use that as the base executable name.
+    executable_name = __sys.argv[0]
+    if executable_name.endswith('__main__.py') or is_debugger():
+        # Check if the APP_NAME environment variable is set
+        # and use that as the base executable name
+        if __os.environ.get('APP_NAME', None) is not None:
+            return __os.environ.get('APP_NAME')
+
+        # Get the parent directory of the script being run and
+        # make its name the executable name
+        executable_path = __os.path.abspath(executable_name)
+        executable_name = __os.path.dirname(executable_path)
+        return executable_name
+    else:
+        # Get the base name of the executable. If the executable name is '-m'
+        # then we should use the APP_NAME environment variable as the base name
+        basename = __os.path.basename(executable_name)
+        if basename == '-m':
+            basename = __os.environ.get('APP_NAME', 'panda3d')
+
+        # Remove the file extension from the basename and
+        # return that as the base executable name
+        basename = __os.path.splitext(basename)[0]
+        return basename
+
+executable_name = get_base_executable_name()
 
 #----------------------------------------------------------------------------------------------------------------------------------#
 

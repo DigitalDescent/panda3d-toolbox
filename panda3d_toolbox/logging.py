@@ -177,12 +177,25 @@ def configure_log_file() -> None:
     log_ext = prc.get_prc_string('app-log-ext', 'txt')
     log_filename = f"{log_prefix}_{log_suffix}.{log_ext}"
 
+    # Ensure our logging folder exists if it does not already. If the folder
+    # already exists ensure only the 5 latest logs are kept. everything 
+    # else should be purged.
+    log_directory = get_log_directory()
+    if not os.path.exists(log_directory):
+        os.makedirs(log_directory)
+    else:
+        log_files = sorted([f for f in os.listdir(log_directory) if f.startswith(log_prefix) and f.endswith(log_ext)], reverse=True)
+        if len(log_files) >= 5:
+            for i in range(5, len(log_files)):
+                os.remove(os.path.join(log_directory, log_files[i]))
+
     # Open a new log file stream for appending. 
     # Make sure to use the 'a' mode (appending) because both Python and Panda3D
     # open this same filename to write to. Append mode has the nice property of seeking to the end of
     # the output stream before actually writing to the file. 'w' mode does not do this, so you will see Panda3D's
     # output and Python's output not interlace properly.
-    log_file_path = os.path.join(get_log_directory(), log_filename)
+    log_file_path = os.path.join(log_directory, log_filename)
+    log_file_path = os.path.abspath(log_file_path)
     log_stream = io_open(log_file_path, 'a')
 
     # Create new Python log handlers for stdout and stderr and redirect
@@ -193,7 +206,8 @@ def configure_log_file() -> None:
     sys.stdout = log_output
     sys.stderr = log_error
 
-    # Configture Panda3D to use the same log file
+    # Configure Panda3D to use the same log file.
+    # This will allow us to have a single log file for all output.
     nout = MultiplexStream()
     Notify.ptr().set_ostream_ptr(nout, 0)
 
@@ -207,7 +221,7 @@ def configure_log_file() -> None:
     print(f"Current time: {time.asctime(time.localtime(time.time()))}")
     print(f"sys.path = ", sys.path)
     print(f"sys.argv = ", sys.argv)
-    print(f"os.environ = ", os.environ)
+    print('=' * 100)
 
 # ----------------------------------------------------------------------------------------------- 
 
@@ -228,7 +242,7 @@ class NotifyHandler(StreamHandler):
         self.name = name
         self.notify = get_notify_category(name)
 
-    def emite(self, record: object) -> None:
+    def emit(self, record: object) -> None:
         """
         Processes the incoming record from the logging module
         """
@@ -241,8 +255,7 @@ class NotifyHandler(StreamHandler):
             func = getattr(self.notify, level)
         else:
             func = self.notify.info
-        
-        func.info(message)
+        func(message)
 
 def configure_logging_module() -> None:
     """
@@ -271,7 +284,6 @@ def configure_sentry_monitoring() -> None:
 
     sentry_dsn = prc.get_prc_string('sentry-dsn', '')
     sentry_trace_rate = prc.get_prc_double('sentry-trace-rate', 1.0)
-
     assert sentry_dsn != ''
 
     import sentry_sdk

@@ -1,63 +1,20 @@
-import re
+"""
+"""
+
 import os
 import sys
 import datetime
 import itertools
 import datetime
-import types
-import math
 import gc
-import functools
+import importlib
 
-from math import floor, ceil
 from functools import reduce
 
 from direct.directnotify.DirectNotifyGlobal import directNotify
-from panda3d.core import Filename, Point2, Point3
-from panda3d.core import Vec3
-
 from panda3d_toolbox import runtime
 
-__utility_notify = directNotify.newCategory('utilities')
-
-_SNAKE_NAME_RE = re.compile('(?<!^)(?=[A-Z])')
-
-def get_snake_case(text: str, splitter='_') -> str:
-    """
-    Returns the snake case version of the requested string
-    """
-
-    return _SNAKE_NAME_RE.sub(splitter, text).lower()
-
-def get_camel_case(text: str, splitter='_') -> str:
-    """
-    Returns the camel case version of the requested string
-    """
-
-    return ''.join(x.capitalize() or splitter for x in text.split(splitter))
-
-def open_web_url(url: str) -> bool:
-    """
-    Attempts to open the website url. Returning true on sucess
-    otherwise False on failure.
-    """
-
-    success = False
-    if sys.platform == 'darwin':
-        os.system('/usr/bin/open %s' % url)
-    elif sys.platform == 'linux':
-        import webbrowser
-        webbrowser.open(url)
-        success = True
-    else:
-        try:
-            import webbrowser
-            webbrowser.open(url)
-            success = True
-        except:
-            os.system('explorer "%s"' % url)
-
-    return success
+__notify = directNotify.newCategory('utilities')
 
 def get_time_as_string(seconds: bool = False) -> str:
     """
@@ -72,106 +29,6 @@ def get_time_as_string(seconds: bool = False) -> str:
         output = '%02d:%02d' % (now.hour, now.minute)
 
     return output
-
-def is_awaitable_function(func: object) -> bool:
-    """
-    Returns true if the function is awaitable
-    """
-
-    assert func != None
-    assert callable(func)
-
-    import inspect
-    return inspect.iscoroutinefunction(func)
-
-def run_func_async(func: object, name: str = None) -> None:
-    """
-    Runs a the requested function under a coroutine
-    """
-
-    assert func != None
-    assert callable(func)
-
-    if name is None:
-        name = '%s-async-task' % func.__name__
-
-    async def async_wrapper(task) -> int:
-        """
-        Async wrapper for the callback
-        """
-
-        await func()
-        return task.done
-
-    create_task(async_wrapper, name)
-
-def perform_callback_on_condition(condition: bool, callback: object, *args, **kwargs) -> None:
-    """
-    Performs the required callback if the condition is True
-    """
-
-    assert callback != None
-    assert callable(callback)
-
-    # Check if the condition is true
-    if not condition:
-        return
-
-    if is_awaitable_function(callback):
-        run_func_async(callback, '%s-callback-async' % callback.__name__)
-    else:
-        callback(*args, **kwargs)
-
-def __create_task_name(obj, task):
-    """
-    Creates a name for a task based on the obj its being used on
-    """
-
-    cls_name = obj.__class__.__name__
-    if hasattr(obj, 'get_name'):
-        name = obj.get_name()
-        return '%s.%s(%s)' % (cls_name, task, name)
-
-    return '%s.%s(<%d>)' % (cls_name, task, id(obj))
-
-def create_task(task_func, task_name = '', priority = 0, task_chain_name: str = None):
-    """
-    Creates a new task with the task manager
-    """
-
-    task_name = __create_task_name(task_func.__self__, task_name or task_func.__name__)
-    return runtime.task_mgr.add(task_func, task_name, priority, taskChain=task_chain_name)
-
-def create_delayed_task(task_func, delay, task_name = '', priority = 0):
-    """
-    Creates a new delayed task with the task manager
-    """
-
-    task_name = __create_task_name(task_func.__self__, task_name or task_func.__name__)
-    return runtime.task_mgr.do_method_later(task_func, task_name, priority)
-
-def remove_task(task):
-    """
-    Removes a task from the task manager
-    """
-
-    runtime.task_mgr.remove(task)
-
-def create_thread(thread_name, thread_priority=0, prc_check: str = None):
-    """
-    Creates a new task manager thread
-    """
-
-    threads=0
-    if prc_check != None:
-        from panda3d_toolbox import prc
-        if prc.get_prc_bool(prc_check, False):
-            threads=1
-
-    runtime.task_mgr.setupTaskChain(
-        thread_name, 
-        numThreads=threads, 
-        threadPriority=thread_priority)
 
 def diffs(lst1, lst2):
     """
@@ -194,90 +51,6 @@ def null_generator():
     if False:
         yield
 
-def open_os_directory(path: str) -> bool:
-    """
-    Opens a directory path in the operation system's file explorer.
-    Returning true on success, otherwise false.
-    """
-
-    success = False
-    if sys.platform == 'darwin':
-        __utility_notify.warning('open_os_directory is not supported on platform: %s' % sys.platform)
-    elif sys.platform == 'linux2' or sys.platform == 'linux':
-        __utility_notify.warning('open_os_directory is not supported on platform: %s' % sys.platform)
-    else:
-        os.system('explorer "%s"' % path)
-        success = True
-
-    return success
-
-def get_local_data_directory() -> str:
-    """
-    Returns the application's local data directory
-    """
-
-    from panda3d_toolbox import prc
-    folder_name = prc.get_prc_string('data-folder', 'Panda3D')
-
-    if sys.platform in ['win32', 'cygwin', 'msys']:
-        return os.path.join(os.getenv('LOCALAPPDATA'), folder_name)
-    else:
-        __utility_notify.warning('get_local_data_directory is not supported on platform: %s. Defaulting to install directory' % sys.platform)
-        return '.'
-
-def get_local_data_path(path: str) -> str:
-    """
-    Returns the path relative to the application's local data directory
-    """
-
-    return os.path.join(get_local_data_directory(), path)
- 
-def get_screenshot_directory(absolute: bool = False) -> str:
-    """
-    Returns the application's screenshot directory
-    """
-    
-    return get_local_data_path('screenshots')
-
-def open_screenshot_directory() -> bool:
-    """
-    Opens the application's screenshot directory in the operation system's
-    file browser window. Returning true on success, otherwise false.
-    """
-
-    return open_os_directory(get_screenshot_directory(True))
-
-def build_screenshot_filename(basename: str = 'screenshot', directory: str = None, format: str = 'png') -> str:
-    """
-    Builds the file path for a newly created screenshot
-    """
-
-    if directory is None:
-        directory = get_screenshot_directory()
-
-    now = datetime.datetime.now()
-    filename = now.strftime(basename + '_%y%m%d_%H%M%S')
-    path = os.path.join(directory, filename +' .' + format)
-    appendix = 0
-
-    while os.path.exists(path):
-        appendix += 1
-        path = os.path.join(directory, filename + '_' + str(appendix) + '.' + format)
-
-    return path
-
-def save_screenshot(directory: str = None, format: str = 'png', win: object = None):
-    """
-    Saves a screenshot of the current render output to file
-    """
-
-    if not win:
-        win = runtime.base.win
-
-    path = build_screenshot_filename(directory=directory, format=format)
-    win.save_screenshot(Filename(path))
-    __utility_notify.info('Saved Screenshot: %s' % path)
-
 def foreach(sequence: list, callable: object, *args, **kwargs) -> None:
     """
     Iterates through a sequence performing a callback on each element
@@ -298,68 +71,15 @@ def foreach_call_method_by_name(sequence: list, method_name: str, *args, **kw) -
 
     return results
 
-BACKGROUND_THREAD_NAME = 'background-tasks'
-
-def start_background_thread() -> None:
-    """
-    Starts a background thread chain in the Panda3D
-    task manager
-    """
-
-    runtime.task_mgr.setupTaskChain(
-        BACKGROUND_THREAD_NAME, 
-        numThreads = 1,
-        threadPriority = 0)
-
-def map_point_to_screen(nodepath: object, point: object) -> object:
-    """
-    """
-
-    p3 = runtime.cam.get_relative_point(nodepath, point)
-    p2 = Point2()
-
-    if not runtime.base.camlens.project(p3, p2):
-        return None
-
-    r2d = Point3(p2[0], 0, p2[1])
-    a2d = runtime.base.aspect2d.get_relative_point(runtime.base.render2d, r2d)
-
-    return a2d
-
-def snap_to_grid(node_path: object, grid_size: object) -> tuple:
-    """
-    """
-
-    x, y, z = node_path[0], node_path[1], node_path[2]
-    return (floor(x / grid_size[0]) * grid_size[0], floor(y / grid_size[1]) * grid_size[1], floor(z / grid_size[2]) * grid_size[2])
-
-def get_bounds_of_model(model: object, rotation: float = 0.0) -> tuple:
-    """
-    """
-
-    h = model.get_h()
-    model.set_h(rotation)
-    min_corner, max_corner = model.get_tight_bounds()
-    model.set_h(h)
-    delta = max_corner - min_corner
-
-    return (min_corner, max_corner, Vec3(int(ceil(round(delta.get_x(), 1))), int(ceil(round(delta.get_y(), 1))), int(ceil(round(delta.get_z(), 1)))))
-
 def write_ini_file(filepath: str, input: object, output: object, template: str = '[Configuration]\n\n[Model]\n%(output)s: %(input)s\n') -> None:
     """
     Writes a new ini file to the requested output path location
     """
 
-    __utility_notify.info('write_ini_file: Creating ini file for "%s"... ' % input)
+    __notify.info('write_ini_file: Creating ini file for "%s"... ' % input)
     fh = open(filepath, 'w')
     fh.write(template % {'input': input, 'output': output})
     fh.close()
-
-def has_attributes(object: object, attributes: list) -> list:
-    """
-    """
-
-    return reduce(bool.__and__, [ hasattr(object, attr) for attr in attributes ])
 
 def get_refcounts() -> list:
     """
@@ -367,7 +87,6 @@ def get_refcounts() -> list:
     """
 
     d = {}
-    import sys.modules
     for m in list(sys.modules.values()):
         for sym in dir(m):
             o = getattr(m, sym)
@@ -414,90 +133,37 @@ def print_unreachable_garbage() -> None:
         for garbage in garbage_list:
             print(str(garbage))
 
-def to_unicode(string: str) -> str:
+def set_if_not_set(dict: dict, other: dict) -> None:
     """
+    Sets the values of a dictionary from another dictionary if the key
+    is not already set.
     """
 
-    if type(string) == str:
-        return string
+    for key, value in other.items():
+        if key not in dict or dict[key] == None:
+            dict[key] = value
 
+def get_module_path(module_name):
+    """
+    Get the file path of a Python module, whether local or installed via pip.
+
+    Args:
+        module_name (str): The name of the module to locate.
+
+    Returns:
+        str: The path to the module's file, or None if the module cannot be found.
+    """
     try:
-        return str(string.decode('utf-8'))
-    except UnicodeError:
-        return ''
+        # Check if the module is already imported
+        if module_name in sys.modules:
+            module = sys.modules[module_name]
+            return getattr(module, '__file__', None)
 
-def utf8_capitalize(string: str) -> str:
-    """
-    """
-
-    return to_unicode(string).capitalize().encode('utf-8')
-
-def utf8_lower(string: str) -> str:
-    """
-    """
-
-    return to_unicode(string).lower().encode('utf-8')
-
-class _DoMethodAfterNFrames(object):
-    """
-    """
-
-    def __init__(self, frames_to_wait: int, method: object, args: list):
-        self.__frames_to_wait = frames_to_wait
-        self.__method = method
-        self.__args = args
-
-    def task_function(self, task: object) -> int:
-        """
-        """
-
-        self.__frames_to_wait -= 1
-        
-        if self.__frames_to_wait <= 0:
-            self.__method(*self.__args)
-
-            return task.done
-
-        return task.cont
-
-def do_method_after_n_frames(frames_to_wait: int, method: object, args: list = [], priority: int = 0) -> None:
-    """
-    """
-
-    if frames_to_wait > 0:
-        create_task(_DoMethodAfterNFrames(frames_to_wait, method, args).task_func, priority=priority)
-    else:
-        __utility_notify.error('Invalid request. do_method_after_n_frames received a frames wait of 0')
-
-def set_setters_from_dict(obj: object, data: dict) -> None:
-    """
-    Sets the attributes of an object from a dictionary. 
-    The dictionary keys should match the object's setter methods.
-
-    IE. name -> set_name(self, name)
-    """
-
-    for key, value in data.items():
-        setter = f"set_{get_snake_case(key)}"
-        if not hasattr(obj, setter):
-            raise AttributeError(
-                f"Object {obj} does not have a setter for {key}")
-
-        getattr(obj, setter)(value)
-
-def calculate_circle_edge_point(center: Vec3, diameter: float, angle_degrees: float) -> Vec3:
-    """
-    Calculate the point on the edge of a circle given the center, diameter, and angle.
-    """
-
-    # Calculate radius
-    radius = diameter / 2
-
-    # Convert angle to radians
-    angle_radians = math.radians(angle_degrees)
-
-    # Calculate the x and y coordinates of the point on the edge
-    x = center.get_x() + radius * math.cos(angle_radians)
-    y = center.get_y() + radius * math.sin(angle_radians)
-
-    return Vec3(x, y, center.get_z())
+        # Try to find the module spec
+        spec = importlib.util.find_spec(module_name)
+        if spec and spec.origin:
+            return os.path.abspath(spec.origin)
+        else:
+            return None
+    except ModuleNotFoundError:
+        return None
