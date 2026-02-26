@@ -47,7 +47,7 @@ def get_package_url(main_module: str) -> str:
     """
 
     repository_name = main_module.replace('_', '-')
-    return f'https://github.com/thetestgame/{repository_name}'
+    return f'https://github.com/DigitalDescent/{repository_name}'
 
 def main() -> int:
     """
@@ -60,13 +60,13 @@ def main() -> int:
     # Run the setup
     setup(
         name=module_name,
-        description='',
+        description='A toolbox for Panda3D development with utilities for class registration, logging, and runtime environment detection.',
         long_description=get_readme(),
         long_description_content_type='text/markdown',
         license='MIT',
         version=get_version(),
-        author='Jordan Maxwell',
-        maintainer='Jordan Maxwell',
+        author='Digital Descent, LLC',
+        maintainer='Digital Descent, LLC',
         url=get_package_url(module_name),
         packages=[module_name],
         install_requires=[
